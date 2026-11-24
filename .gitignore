@@ -1,0 +1,7 @@
+# Кэш редактора и локальные данные экспорта Godot
+/game/.godot/
+/game/.godot_credentials
+/game/export_credentials.cfg
+
+# Локальная сборка из профиля Windows
+/Пульс Пустоты.exe
