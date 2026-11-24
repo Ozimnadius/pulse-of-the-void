@@ -42,6 +42,7 @@ func _draw() -> void:
 	draw_arc(Vector2(1231,35),7,0,TAU,22,MINT,1.2,true)
 	draw_circle(Vector2(1231,35),2,MINT)
 	if game.modal == "" and game.phase != game.Phase.NIGHT:
+		draw_conversation()
 		tag(Vector2(72,319),"ЖИЛАЯ СЕКЦИЯ")
 		tag(Vector2(502,318),"МАСТЕРСКАЯ")
 		tag(Vector2(47,636),"СТОЛОВАЯ")
@@ -88,6 +89,21 @@ func _draw() -> void:
 			draw_note()
 		"restart":
 			draw_restart()
+
+func draw_conversation() -> void:
+	var residents = game.residents
+	if residents.speaker < 0:
+		return
+	var speaker_pos: Vector2 = residents.people[residents.speaker].position
+	if game.player.distance_to(speaker_pos) > 205.0:
+		return
+	var tip: Vector2 = game.get_node("Deck").to_global(speaker_pos + Vector2(0, -43))
+	var width := normal.get_string_size(residents.line, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 18
+	var box := Rect2(clampf(tip.x - width / 2, 6, 1274 - width), tip.y - 34, width, 27)
+	draw_rect(box, PANEL)
+	draw_rect(box, LINE, false, 1)
+	draw_colored_polygon(PackedVector2Array([tip, tip + Vector2(-5,-8), tip + Vector2(5,-8)]), PANEL)
+	word(box.position + Vector2(9,19), residents.line, 15)
 
 func tag(p: Vector2, caption: String, color: Color = QUIET, size: int = 12) -> void:
 	var font = mono if size == 12 else normal

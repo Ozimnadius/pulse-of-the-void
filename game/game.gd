@@ -32,8 +32,6 @@ var progress = 0
 var repair = 0.0
 var elapsed = 0.0
 var night_time = 0.0
-var moving = false
-var heading = Vector2.DOWN
 var running = false
 var held := {}
 var sound: AudioStreamPlayer
@@ -41,20 +39,12 @@ var tone: AudioStreamPlayer
 var muted = false
 var music: AudioStreamPlayer
 var music_fade: Tween
-const WALK_STEP = 23.0
-const RUN_STEP = 31.0
-const DECK_DEPTH_SCALE = 0.68
-const FOOTSTEPS = [
-	preload("res://audio/footstep.wav"), preload("res://audio/footstep_2.wav"),
-	preload("res://audio/footstep_3.wav"), preload("res://audio/footstep_4.wav"),
-	preload("res://audio/footstep_5.wav"), preload("res://audio/footstep_6.wav")
-]
-var gait_phase = 0.25
-var gait_frame: int:
-	get:
-		return floori(gait_phase * 12.0)
+const Walker = preload("res://walker.gd")
+@onready var residents = $Deck/Residents
 
 func _ready() -> void:
+	$Departure.stream = preload("res://audio/departure.wav")
+	$Departure.volume_db = -4.0
 	$HUD.hide()
 	$Deck.hide()
 	$TitleMenu.start_requested.connect(_start_from_menu)
@@ -93,6 +83,8 @@ func _start_from_menu() -> void:
 	_fade_music(-12.0)
 
 func _return_to_menu() -> void:
+	residents.stop_sounds()
+	$Departure.stop()
 	$Deck.hide()
 	sound.stop()
 	_fade_music(-3.0)
@@ -100,9 +92,8 @@ func _return_to_menu() -> void:
 
 func _finish_route() -> void:
 	phase = Phase.FINISHED
-	moving = false
 	held.clear()
-	$Footstep.stop()
+	residents.finish_scene()
 	$Deck.queue_redraw()
 	$HUD.hide()
 	$TitleMenu.show_ending(route)
@@ -113,7 +104,8 @@ func _toggle_sound() -> void:
 	$TitleMenu.set_sound_enabled(not muted)
 
 func _close() -> void:
-	$Footstep.stop()
+	residents.stop_sounds()
+	$Departure.stop()
 	music.stop()
 	sound.stop()
 	tone.stop()
@@ -185,11 +177,9 @@ func reset_game() -> void:
 	progress = 0
 	repair = 0.0
 	night_time = 0.0
-	moving = false
-	heading = Vector2.DOWN
 	running = false
-	gait_phase = 0.25
-	$Footstep.stop()
+	$Departure.stop()
+	residents.populate("arrival")
 	held.clear()
 
 func is_held(keys: Array) -> bool:
@@ -206,44 +196,27 @@ func can_walk(pos: Vector2) -> bool:
 			return true
 	return false
 
-func advance_gait(distance: float) -> void:
-	var previous_half = gait_phase >= 0.5
-	var step_length = RUN_STEP if running else WALK_STEP
-	gait_phase = fmod(gait_phase + distance / (2.0 * step_length), 1.0)
-	# Кадры 0 и 6 — касание пятки. Записи взяты парами из одной прогулки.
-	if (gait_phase >= 0.5) != previous_half:
-		var foot = int(gait_phase >= 0.5)
-		$Footstep.stream = FOOTSTEPS[2 * randi_range(0, 2) + foot]
-		$Footstep.volume_db = -1.0 if running else -4.0
-		$Footstep.play()
-
 func _physics_process(delta: float) -> void:
 	if $TitleMenu.visible:
 		return
 	elapsed += delta
-	moving = false
 	if phase == Phase.NIGHT:
 		night_time += delta
 		if night_time >= 3.6:
 			phase = Phase.MORNING
 			player = Vector2(340, 213)
+			residents.populate(route)
 	elif modal == "":
 		var direction = Vector2(
 			int(is_held([KEY_RIGHT, KEY_D])) - int(is_held([KEY_LEFT, KEY_A])),
 			int(is_held([KEY_DOWN, KEY_S])) - int(is_held([KEY_UP, KEY_W])))
 		running = is_held([KEY_SHIFT])
 		var travel = direction.normalized() * (104.0 if running else 62.0) * delta
-		travel.y *= DECK_DEPTH_SCALE
-		var old = player
+		travel.y *= Walker.DEPTH
 		if can_walk(player + Vector2(travel.x, 0)):
 			player.x += travel.x
 		if can_walk(player + Vector2(0, travel.y)):
 			player.y += travel.y
-		moving = player.distance_squared_to(old) > 0.01
-		if moving:
-			var ground_motion = (player - old) / Vector2(1.0, DECK_DEPTH_SCALE)
-			heading = ground_motion.normalized()
-			advance_gait(ground_motion.length())
 		if route == "home" and progress == 1 and guide_index < GUIDE_PATH.size():
 			var destination: Vector2 = GUIDE_PATH[guide_index]
 			if player.distance_to(guide) < 120:
@@ -259,8 +232,7 @@ func _physics_process(delta: float) -> void:
 					show_note("Разъём обжат", ["Контакт держит. Механик протягивает вам разъём.", "Отнесите его к открытой аппарели грузовика."])
 			else:
 				repair = 0.0
-	if not moving:
-		gait_phase = 0.25 if gait_phase < 0.5 else 0.75
+	residents.advance(delta)
 	$Deck.queue_redraw()
 	$HUD.queue_redraw()
 
@@ -334,7 +306,7 @@ func choose_route() -> void:
 	night_time = 0
 	modal = ""
 	held.clear()
-	chirp(520)
+	$Departure.play()
 
 func chirp(hz: float) -> void:
 	var wave = AudioStreamWAV.new()

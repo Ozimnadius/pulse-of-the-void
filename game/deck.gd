@@ -1,8 +1,6 @@
 extends Node2D
 
 const BACKDROP = preload("res://art/dock.png")
-const CREW = preload("res://art/crew.png")
-const HERO = preload("res://art/hero_gait.png")
 const FERRY = preload("res://art/ferry.png")
 const AMBER = Color("#ffcb7f")
 const MINT = Color("#89dfce")
@@ -54,16 +52,21 @@ func _draw() -> void:
 			draw_line(Vector2(x,312), Vector2(x+8,312),Color("#b39968"),1)
 		draw_line(Vector2(749,296), Vector2(801,296), Color("#ffe4a1"),3)
 		glow(Vector2(776,323), Vector2(145,136), Color(1,0.73,0.33,0.74))
-	draw_people(morning)
+	if not morning:
+		for x in [626,665,711]:
+			draw_rect(Rect2(x,199,9,6), Color("#54473e"))
+			draw_rect(Rect2(x+2,198,5,2), Color("#b59b78"))
+	draw_arc(game.player+Vector2(0,-2),10,0.05,PI-0.05,20,MINT,1.1,true)
+	glow(game.player+Vector2(0,-10),Vector2(38,38),Color(0.38,1,0.85,0.12))
 	for p in game.points():
 		if p[0] == "ship" and game.nearest() != "ship":
 			continue
 		var done: bool = game.inspected.has(p[0])
 		var primary: bool = not done and (p[0] != "switch" or game.inspected.size() == 2)
-		var anchor: Vector2 = p[1] + Vector2(0,-29 if p[0] in ["guide","mechanic"] else -8)
+		var anchor: Vector2 = p[1] + Vector2(0,-46 if p[0] in ["guide","mechanic"] else -8)
 		marker(anchor, done, primary)
 	if game.phase == game.Phase.MORNING and game.route == "home" and game.progress == 1 and game.guide_index < game.GUIDE_PATH.size():
-		marker(game.guide+Vector2(0,-32),false,true)
+		marker(game.guide+Vector2(0,-47),false,true)
 	if game.repair > 0.0 and game.progress == 1 and game.route == "shop":
 		draw_rect(Rect2(game.BENCH+Vector2(-19,-18),Vector2(38,4)),Color("#18252b"))
 		draw_rect(Rect2(game.BENCH+Vector2(-19,-18),Vector2(38*game.repair,4)),MINT)
@@ -103,49 +106,3 @@ func blanket(p: Vector2,roll: bool) -> void:
 	if not roll:
 		draw_circle(Vector2(p.x,r.position.y+4),3.7,Color("#684535"))
 		draw_line(Vector2(r.position.x+2,p.y+6),Vector2(r.end.x-2,p.y+6),Color("#d49969"),1)
-
-func draw_people(morning: bool) -> void:
-	var people: Array = []
-	if not morning:
-		for a in [[652,180,3],[631,197,4],[613,191,6],[602,205,2],[688,173,7],[707,183,5]]:
-			people.append([Vector2(a[0],a[1]),a[2],false,false])
-		for x in [626,665,711]:
-			draw_rect(Rect2(x,199,9,6), Color("#54473e"))
-			draw_rect(Rect2(x+2,198,5,2), Color("#b59b78"))
-	elif game.route == "home":
-		people.append([game.guide,1,game.progress==1 and game.guide_index<game.GUIDE_PATH.size() and game.player.distance_to(game.guide)<120,false])
-		people.append([Vector2(101,146),4,false,false])
-		people.append([Vector2(211,133),6,false,true])
-		people.append([Vector2(91,325),7,false,false])
-	else:
-		people.append([game.MECHANIC,5,false,true])
-		people.append([Vector2(430,143),3,false,false])
-		people.append([Vector2(137,326),4,false,true])
-		people.append([Vector2(181,383),6,false,false])
-		if game.phase == game.Phase.FINISHED:
-			people.append([Vector2(705,383),2,false,false])
-			people.append([Vector2(724,377),1,false,false])
-		else:
-			people.append([Vector2(55,373),2,false,false])
-			people.append([Vector2(105,344),1,false,false])
-	people.append([game.player,0,game.moving,game.heading.x < 0])
-	people.sort_custom(func(a,b): return a[0].y < b[0].y)
-	for a in people:
-		person(a[0],a[1],a[2],a[3])
-
-func person(pos: Vector2, row: int, walking: bool, left: bool) -> void:
-	if row == 0:
-		draw_arc(pos+Vector2(0,-2),10,0.05,PI-0.05,20,MINT,1.1,true)
-		glow(pos+Vector2(0,-10),Vector2(38,38),Color(0.38,1,0.85,0.12))
-		var view = roundi(absf(Vector2.DOWN.angle_to(game.heading)) / (PI / 4.0))
-		var strip = view * 2 + int(walking and game.running)
-		var pose: int = game.gait_frame if walking else 12
-		draw_set_transform(pos.round(), 0, Vector2(-0.87 if left else 0.87, 0.87))
-		draw_texture_rect_region(HERO, Rect2(-28,-49,56,56), Rect2(pose*56,strip*56,56,56))
-		draw_set_transform(Vector2.ZERO)
-		return
-	var frame = int(game.elapsed*9.0)%4 if walking else 0
-	var size = Vector2(23,29)
-	draw_set_transform(Vector2(roundf(pos.x),roundf(pos.y)),0,Vector2(-1 if left else 1,1))
-	draw_texture_rect_region(CREW, Rect2(-size.x/2,-size.y+2,size.x,size.y),Rect2(frame*32,row*40,32,40))
-	draw_set_transform(Vector2.ZERO)
