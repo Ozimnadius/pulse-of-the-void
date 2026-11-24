@@ -1,11 +1,13 @@
 extends Node2D
 
-const BACKDROP = preload("res://art/dock.png")
+const STAR_PERIOD := 150.0
+const ASTEROID_PERIOD := 37.5
 const FERRY = preload("res://art/ferry.png")
 const AMBER = Color("#ffcb7f")
 const MINT = Color("#89dfce")
 var lamp: GradientTexture2D
 @onready var game = get_parent()
+@onready var sky_material: ShaderMaterial = $Backdrop.material
 
 func _ready() -> void:
 	var colors = Gradient.new()
@@ -23,7 +25,9 @@ func glow(p: Vector2, size: Vector2, tint: Color) -> void:
 	draw_texture_rect(lamp, Rect2(p-size/2, size), false, tint)
 
 func _draw() -> void:
-	draw_texture_rect(BACKDROP, Rect2(0,0,960,480), false)
+	var drift := Vector2(fposmod(game.elapsed, STAR_PERIOD) / STAR_PERIOD,
+		fposmod(game.elapsed, ASTEROID_PERIOD) / ASTEROID_PERIOD)
+	sky_material.set_shader_parameter("drift", drift)
 	var morning: bool = game.phase >= game.Phase.MORNING
 	if morning:
 		draw_rect(Rect2(0,0,960,480), Color(0.49,0.65,0.76,0.065))
