@@ -74,7 +74,7 @@ func _draw() -> void:
 	word(Vector2(44,778),game.objective(),24,WHITE,heavy)
 	rule(Vector2(700,730),Vector2(700,782))
 	word(Vector2(724,748),"WASD / стрелки — ходьба     F — действие",16,WHITE)
-	word(Vector2(724,775),"R — сыграть заново     M — звук " + ("выкл." if game.muted else "вкл."),15,QUIET)
+	word(Vector2(724,775),"Esc — пауза     R — заново     M — звук " + ("выкл." if game.muted else "вкл."),15,QUIET)
 	if game.phase == game.Phase.NIGHT:
 		var a = minf(0.93,game.night_time*0.64)
 		draw_rect(Rect2(0,72,1280,640), Color(0.025,0.062,0.077,a))

@@ -42,6 +42,8 @@ var music: AudioStreamPlayer
 var music_fade: Tween
 const Walker = preload("res://walker.gd")
 @onready var residents = $Deck/Residents
+@onready var store = $SaveMenu.store
+const MORNING_START := Vector2(340, 213)
 
 func _ready() -> void:
 	$Departure.stream = preload("res://audio/departure.wav")
@@ -49,9 +51,16 @@ func _ready() -> void:
 	$HUD.hide()
 	$Deck.hide()
 	$TitleMenu.start_requested.connect(_start_from_menu)
+	$TitleMenu.continue_requested.connect(_continue_game)
+	$TitleMenu.load_requested.connect(_browse_from_title)
 	$TitleMenu.menu_requested.connect(_return_to_menu)
 	$TitleMenu.sound_requested.connect(_toggle_sound)
 	$TitleMenu.exit_requested.connect(_close)
+	$SaveMenu.resumed.connect(_resume)
+	$SaveMenu.title_requested.connect(_return_to_menu)
+	$SaveMenu.load_requested.connect(_restore)
+	$SaveMenu.save_requested.connect(_save_manual)
+	$TitleMenu.show_title(not store.entries().is_empty())
 	music = AudioStreamPlayer.new()
 	music.stream = preload("res://audio/dock_theme.ogg")
 	music.volume_db = -48.0 + linear_to_db(MUSIC_GAIN)
@@ -76,6 +85,10 @@ func _fade_music(volume: float) -> void:
 
 func _start_from_menu() -> void:
 	reset_game()
+	_show_game()
+
+func _show_game() -> void:
+	_resume()
 	$TitleMenu.hide()
 	$HUD.show()
 	$Deck.show()
@@ -84,15 +97,89 @@ func _start_from_menu() -> void:
 	_fade_music(-12.0)
 
 func _return_to_menu() -> void:
+	_resume()
 	residents.stop_sounds()
 	$Departure.stop()
 	$Deck.hide()
+	$HUD.hide()
 	sound.stop()
 	_fade_music(-3.0)
-	$TitleMenu.show_title()
+	$TitleMenu.show_title(not store.entries().is_empty())
+
+func _browse_from_title() -> void:
+	$TitleMenu.focus_behavior_recursive = Control.FOCUS_BEHAVIOR_DISABLED
+	$SaveMenu.load_from_title()
+
+func _resume() -> void:
+	held.clear()
+	$SaveMenu.hide()
+	$TitleMenu.focus_behavior_recursive = Control.FOCUS_BEHAVIOR_INHERITED
+	$Departure.stream_paused = false
+
+func _pause() -> void:
+	held.clear()
+	running = false
+	residents.stop_sounds()
+	$Departure.stream_paused = true
+	$SaveMenu.pause_game(_saved_objective())
+
+func _saved_objective() -> String:
+	return objective(Phase.MORNING if phase == Phase.NIGHT else phase)
+
+func _write_save(id: String, caption: String) -> bool:
+	var state := {"phase": Phase.MORNING if phase == Phase.NIGHT else phase, "route": route,
+		"inspected": inspected, "player": MORNING_START if phase == Phase.NIGHT else player,
+		"guide": guide, "guide_index": guide_index, "progress": progress}
+	var ok: bool = store.write(id, caption, _saved_objective(), state)
+	$SaveWarning.visible = not ok
+	return ok
+
+func _autosave() -> void:
+	_write_save(store.AUTO, "Автосохранение")
+
+func _save_manual(id: String, caption: String) -> void:
+	if _write_save(id, caption):
+		$SaveMenu.pause_game(_saved_objective(), "Сохранено · " + caption)
+
+func _continue_game() -> void:
+	var records: Array = store.entries()
+	if records.is_empty():
+		_return_to_menu()
+	else:
+		_restore(records[0])
+
+func _restore(record: Dictionary) -> void:
+	var state: Dictionary = record.state
+	phase = state.phase
+	route = state.route
+	inspected = state.inspected.duplicate()
+	player = state.player
+	guide = state.guide
+	guide_index = state.guide_index
+	progress = state.progress
+	modal = ""
+	selection = 0
+	repair = 0.0
+	night_time = 0.0
+	running = false
+	$Departure.stop()
+	residents.populate("arrival" if phase == Phase.ARRIVAL else route)
+	if route == "home":
+		residents.people[1].position = guide
+	_show_game()
+	if phase == Phase.FINISHED:
+		_show_ending()
+	if record.id != store.AUTO:
+		_autosave()
+	$Deck.queue_redraw()
+	$HUD.queue_redraw()
 
 func _finish_route() -> void:
 	phase = Phase.FINISHED
+	_autosave()
+	_show_ending()
+
+func _show_ending() -> void:
 	held.clear()
 	residents.finish_scene()
 	$Deck.queue_redraw()
@@ -117,6 +204,8 @@ func _clear_keys() -> void:
 	held.clear()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if $SaveMenu.visible:
+		return
 	if $TitleMenu.visible:
 		if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_M:
 			_toggle_sound()
@@ -165,6 +254,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if key in [KEY_F, KEY_E, KEY_ENTER]:
 		interact()
+	elif key == KEY_ESCAPE:
+		_pause()
 
 func reset_game() -> void:
 	phase = Phase.ARRIVAL
@@ -182,6 +273,7 @@ func reset_game() -> void:
 	$Departure.stop()
 	residents.populate("arrival")
 	held.clear()
+	_autosave()
 
 func is_held(keys: Array) -> bool:
 	for k in keys:
@@ -198,14 +290,14 @@ func can_walk(pos: Vector2) -> bool:
 	return false
 
 func _physics_process(delta: float) -> void:
-	if $TitleMenu.visible:
+	if $TitleMenu.visible or $SaveMenu.visible:
 		return
 	elapsed += delta
 	if phase == Phase.NIGHT:
 		night_time += delta
 		if night_time >= 3.6:
 			phase = Phase.MORNING
-			player = Vector2(340, 213)
+			player = MORNING_START
 			residents.populate(route)
 	elif modal == "":
 		var direction = Vector2(
@@ -224,11 +316,14 @@ func _physics_process(delta: float) -> void:
 				guide = guide.move_toward(destination, delta * 62)
 				if guide == destination:
 					guide_index += 1
+					if guide_index == GUIDE_PATH.size():
+						_autosave()
 		if route == "shop" and progress == 1:
 			if player.distance_to(BENCH) < 34 and is_held([KEY_F, KEY_E]):
 				repair = minf(1.0, repair + delta / 1.15)
 				if repair >= 1.0:
 					progress = 2
+					_autosave()
 					chirp(610)
 					show_note("Разъём обжат", ["Контакт держит. Механик протягивает вам разъём.", "Отнесите его к открытой аппарели грузовика."])
 			else:
@@ -276,10 +371,10 @@ func interact() -> void:
 	chirp(370)
 	match target:
 		"home":
-			inspected["home"] = true
+			_inspect("home")
 			show_note("В жилой секции холодно", ["Четыре койки. На первой кто-то оставил детскую куртку.", "Если подать питание, к ночи прогреются матрасы."])
 		"shop":
-			inspected["shop"] = true
+			_inspect("shop")
 			show_note("Верстак обесточен", ["В тисках зажат разъём с обгоревшим контактом.", "Механик перебирает инструменты. Ему нужен ток."])
 		"switch":
 			if inspected.size() == 2:
@@ -290,16 +385,23 @@ func interact() -> void:
 			show_note("У соседнего шлюза", ["Старая грузовая машина. За аппарелью темно.", "Этот корабль останется здесь, когда эвакуационный рейс уйдёт."])
 		"guide":
 			progress = 1
+			_autosave()
 			show_note("Нина, дежурная причала", ["«Малой впервые за трое суток проспал до утра.", "Пойдём. Я знаю, где оставили кабель для второй линии»."])
 		"hatch":
 			progress = 2
 			_finish_route()
 		"mechanic":
 			progress = 1
+			_autosave()
 			show_note("Мирон, механик", ["«Кто спал на скамейке, тот уже на ногах. Давай попробуем.", "Обожми контакт на верстаке. Я подержу провод»."])
 		"light":
 			progress = 3
 			_finish_route()
+
+func _inspect(place: String) -> void:
+	if not inspected.has(place):
+		inspected[place] = true
+		_autosave()
 
 func choose_route() -> void:
 	route = "home" if selection == 0 else "shop"
@@ -308,6 +410,7 @@ func choose_route() -> void:
 	modal = ""
 	held.clear()
 	$Departure.play()
+	_autosave()
 
 func chirp(hz: float) -> void:
 	var wave = AudioStreamWAV.new()
@@ -322,12 +425,14 @@ func chirp(hz: float) -> void:
 	tone.stream = wave
 	tone.play()
 
-func objective() -> String:
-	if phase == Phase.ARRIVAL:
+func objective(at_phase: int = -1) -> String:
+	if at_phase == -1:
+		at_phase = phase
+	if at_phase == Phase.ARRIVAL:
 		return "Осмотрите койки и верстак" if inspected.size() < 2 else "Выберите ночную линию у распределителя"
-	if phase == Phase.NIGHT:
+	if at_phase == Phase.NIGHT:
 		return "Эвакуационный рейс отстыковался"
-	if phase == Phase.FINISHED:
+	if at_phase == Phase.FINISHED:
 		return "Кабель для второй линии найден" if route == "home" else "В грузовом отсеке горит свет"
 	if route == "home":
 		if progress == 0:

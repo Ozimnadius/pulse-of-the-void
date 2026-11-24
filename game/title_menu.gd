@@ -1,6 +1,8 @@
 extends Control
 
 signal start_requested
+signal continue_requested
+signal load_requested
 signal menu_requested
 signal sound_requested
 signal exit_requested
@@ -15,6 +17,8 @@ var text_font = SystemFont.new()
 var code_font = SystemFont.new()
 var sound_button: Button
 var start_button: Button
+var continue_button: Button
+var load_button: Button
 var leave_button: Button
 var ending_route = ""
 
@@ -23,21 +27,28 @@ func _ready() -> void:
 	title_font.font_weight = 700
 	text_font.font_names = title_font.font_names
 	code_font.font_names = PackedStringArray(["Consolas", "DejaVu Sans Mono"])
-	start_button = add_button("Начать игру", 416, start_requested.emit)
-	sound_button = add_button("", 483, sound_requested.emit)
-	leave_button = add_button("Выход", 550, _leave_screen)
+	continue_button = add_button("Продолжить", 401, continue_requested.emit)
+	start_button = add_button("Начать игру", 461, start_requested.emit)
+	load_button = add_button("Загрузить", 521, load_requested.emit)
+	sound_button = add_button("", 581, sound_requested.emit)
+	leave_button = add_button("Выход", 641, _leave_screen)
 	set_sound_enabled(true)
 	show_title()
 
-func show_title() -> void:
+func show_title(has_saves: bool = false) -> void:
 	ending_route = ""
 	show()
 	start_button.text = "Начать игру"
-	start_button.position = Vector2(85, 416)
+	start_button.position = Vector2(85, 461)
+	continue_button.show()
+	load_button.show()
+	continue_button.disabled = not has_saves
+	load_button.disabled = not has_saves
+	continue_button.tooltip_text = "" if has_saves else "Начните игру, чтобы появилось первое сохранение"
 	sound_button.show()
 	leave_button.text = "Выход"
-	leave_button.position = Vector2(85, 550)
-	set_navigation([start_button, sound_button, leave_button])
+	leave_button.position = Vector2(85, 641)
+	set_navigation([continue_button, start_button, load_button, sound_button, leave_button] if has_saves else [start_button, sound_button, leave_button])
 	queue_redraw()
 
 func show_ending(route: String) -> void:
@@ -47,6 +58,8 @@ func show_ending(route: String) -> void:
 	start_button.text = "Сыграть заново"
 	start_button.position = Vector2(x, 466)
 	sound_button.hide()
+	continue_button.hide()
+	load_button.hide()
 	leave_button.text = "В главное меню"
 	leave_button.position = Vector2(x, 533)
 	set_navigation([start_button, leave_button])
@@ -63,7 +76,7 @@ func set_navigation(buttons: Array) -> void:
 		var button: Button = buttons[i]
 		button.focus_neighbor_top = button.get_path_to(buttons[posmod(i-1, buttons.size())])
 		button.focus_neighbor_bottom = button.get_path_to(buttons[(i+1) % buttons.size()])
-	start_button.grab_focus()
+	buttons[0].grab_focus()
 
 func set_sound_enabled(enabled: bool) -> void:
 	sound_button.text = "Звук включён" if enabled else "Звук выключен"
