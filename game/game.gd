@@ -1,6 +1,7 @@
 extends Node2D
 
 enum Phase { ARRIVAL, NIGHT, MORNING, FINISHED }
+const MUSIC_GAIN := 0.75
 const BUNK = Vector2(145, 132)
 const BENCH = Vector2(476, 116)
 const SWITCH = Vector2(455, 371)
@@ -53,7 +54,7 @@ func _ready() -> void:
 	$TitleMenu.exit_requested.connect(_close)
 	music = AudioStreamPlayer.new()
 	music.stream = preload("res://audio/dock_theme.ogg")
-	music.volume_db = -48.0
+	music.volume_db = -48.0 + linear_to_db(MUSIC_GAIN)
 	add_child(music)
 	music.play()
 	_fade_music(-3.0)
@@ -71,7 +72,7 @@ func _fade_music(volume: float) -> void:
 	if music_fade:
 		music_fade.kill()
 	music_fade = create_tween()
-	music_fade.tween_property(music, "volume_db", volume, 1.25)
+	music_fade.tween_property(music, "volume_db", volume + linear_to_db(MUSIC_GAIN), 1.25)
 
 func _start_from_menu() -> void:
 	reset_game()
