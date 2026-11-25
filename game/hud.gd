@@ -31,9 +31,14 @@ func _draw() -> void:
 	word(Vector2(79,32),"ПУЛЬС ПУСТОТЫ",21,WHITE,heavy)
 	word(Vector2(80,53),"ОРИОН  /  3801",13,QUIET,mono)
 	rule(Vector2(304,16),Vector2(304,56))
-	word(Vector2(329,43),"Дальний причал",22,WHITE,heavy)
+	var second_day: bool = game.phase == game.Phase.SUPPLY
+	var supply = game.supply
+	var home: bool = game.route == "home"
+	word(Vector2(329,43),supply.location_name(home) if second_day else "Дальний причал",22,WHITE,heavy)
 	var morning: bool = game.phase >= game.Phase.MORNING
 	var moment = "06:12   УТРО" if morning else ("23:40   НОЧЬ" if game.phase == game.Phase.NIGHT else "19:46   ВЕЧЕР")
+	if second_day:
+		moment = "10:20   ДЕНЬ"
 	word(Vector2(885,43),moment,16,MINT if morning else GOLD,mono)
 	rule(Vector2(1036,20),Vector2(1036,52))
 	var day = "ДЕНЬ 02" if morning else "ДЕНЬ 01"
@@ -43,10 +48,24 @@ func _draw() -> void:
 	draw_circle(Vector2(1231,35),2,MINT)
 	if game.modal == "" and game.phase != game.Phase.NIGHT:
 		draw_conversation()
-		tag(Vector2(72,319),"ЖИЛАЯ СЕКЦИЯ")
-		tag(Vector2(502,318),"МАСТЕРСКАЯ")
-		tag(Vector2(47,636),"СТОЛОВАЯ")
-		tag(Vector2(995,601),"ГРУЗОВОЙ ОТСЕК")
+		if not second_day or supply.place == supply.Place.DOCK:
+			tag(Vector2(72,319),"ЖИЛАЯ СЕКЦИЯ")
+			tag(Vector2(502,318),"МАСТЕРСКАЯ")
+			tag(Vector2(47,636),"СТОЛОВАЯ")
+			tag(Vector2(995,601),"ГРУЗОВОЙ ОТСЕК")
+			if second_day and supply.delivered & supply.RATIONS:
+				tag(Vector2(326,563),"РАЗДАЧА ПАЙКОВ",GOLD)
+			if second_day and supply.delivered & supply.HEATER:
+				tag(Vector2(75,463),"ГОТОВЯТ ОБЕД",MINT)
+		elif supply.place == supply.Place.STORE:
+			if supply.stock() & supply.RATIONS:
+				tag(Vector2(434,556),"ЯЩИК ПАЙКОВ",GOLD)
+			if supply.stock() & supply.HEATER:
+				tag(Vector2(772,599),"НАГРЕВАТЕЛЬ",MINT)
+			tag(Vector2(56 if home else 1064,366),"К ГАЛЕРЕЕ" if home else "К ПЛОЩАДКЕ")
+		else:
+			tag(Vector2(90,550),"К ПРИЧАЛУ")
+			tag(Vector2(1065,493),"СЛУЖЕБНАЯ ДВЕРЬ" if home else "ВОРОТА СКЛАДА")
 		if game.phase == game.Phase.ARRIVAL:
 			tag(Vector2(890,169),"ЭВАКУАЦИОННЫЙ РЕЙС",GOLD)
 			if game.player.distance_to(Vector2(682,191)) < 40 and game.inspected.is_empty():
@@ -70,6 +89,9 @@ func _draw() -> void:
 		kicker = "УТРО  /  " + ("ТЁПЛЫЕ КОЙКИ" if game.route == "home" else "НОЧЛЕГ В СТОЛОВОЙ")
 	if game.phase == game.Phase.FINISHED:
 		kicker = "ПЕРВАЯ СМЕНА ЗАВЕРШЕНА"
+	if second_day:
+		var vehicle = "ТЕЛЕЖКА" if not home and supply.access_ready else "В РУКАХ"
+		kicker = "СНАБЖЕНИЕ  /  %s · %s" % [vehicle, supply.load_name(supply.carried).to_upper()]
 	word(Vector2(44,748),kicker,13,MINT if morning else GOLD,mono)
 	word(Vector2(44,778),game.objective(),24,WHITE,heavy)
 	rule(Vector2(700,730),Vector2(700,782))

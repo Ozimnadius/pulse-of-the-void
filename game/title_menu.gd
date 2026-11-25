@@ -2,6 +2,7 @@ extends Control
 
 signal start_requested
 signal continue_requested
+signal supply_requested
 signal load_requested
 signal menu_requested
 signal sound_requested
@@ -27,7 +28,7 @@ func _ready() -> void:
 	title_font.font_weight = 700
 	text_font.font_names = title_font.font_names
 	code_font.font_names = PackedStringArray(["Consolas", "DejaVu Sans Mono"])
-	continue_button = add_button("Продолжить", 401, continue_requested.emit)
+	continue_button = add_button("Продолжить", 401, _continue_screen)
 	start_button = add_button("Начать игру", 461, start_requested.emit)
 	load_button = add_button("Загрузить", 521, load_requested.emit)
 	sound_button = add_button("", 581, sound_requested.emit)
@@ -41,6 +42,8 @@ func show_title(has_saves: bool = false) -> void:
 	start_button.text = "Начать игру"
 	start_button.position = Vector2(85, 461)
 	continue_button.show()
+	continue_button.text = "Продолжить"
+	continue_button.position = Vector2(85, 401)
 	load_button.show()
 	continue_button.disabled = not has_saves
 	load_button.disabled = not has_saves
@@ -56,14 +59,24 @@ func show_ending(route: String) -> void:
 	show()
 	var x = 729 if route == "home" else 85
 	start_button.text = "Сыграть заново"
-	start_button.position = Vector2(x, 466)
+	start_button.position = Vector2(x, 529)
 	sound_button.hide()
-	continue_button.hide()
+	continue_button.text = "К старому складу"
+	continue_button.position = Vector2(x, 466)
+	continue_button.disabled = false
+	continue_button.tooltip_text = ""
+	continue_button.show()
 	load_button.hide()
 	leave_button.text = "В главное меню"
-	leave_button.position = Vector2(x, 533)
-	set_navigation([start_button, leave_button])
+	leave_button.position = Vector2(x, 592)
+	set_navigation([continue_button, start_button, leave_button])
 	queue_redraw()
+
+func _continue_screen() -> void:
+	if ending_route.is_empty():
+		continue_requested.emit()
+	else:
+		supply_requested.emit()
 
 func _leave_screen() -> void:
 	if ending_route.is_empty():
@@ -146,7 +159,7 @@ func draw_ending() -> void:
 		Vector2(fade_end,800),Vector2(fade_start,800)]),PackedColorArray([solid,clear,clear,solid]))
 	var accent = MINT if home else AMBER
 	draw_line(Vector2(x,163),Vector2(x+46,163),accent,3)
-	draw_string(code_font,Vector2(x,200),"ПРОХОЖДЕНИЕ ЗАВЕРШЕНО",HORIZONTAL_ALIGNMENT_LEFT,-1,19,accent)
+	draw_string(code_font,Vector2(x,200),"ПЕРВОЕ УТРО",HORIZONTAL_ALIGNMENT_LEFT,-1,19,accent)
 	var heading = ["Кабель для", "второй линии"] if home else ["Первый свет", "на борту"]
 	for i in heading.size():
 		draw_string(title_font,Vector2(x-3,274+i*60),heading[i],HORIZONTAL_ALIGNMENT_LEFT,-1,59,CREAM)

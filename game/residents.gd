@@ -1,6 +1,7 @@
 extends Node2D
 
 const Walker = preload("res://walker.gd")
+const Freight = preload("res://freight.gd")
 const COLORS = [Color.WHITE, Color("#59a9b1"), Color("#b17f94"), Color("#7b91b3"),
 	Color("#77a06e"), Color("#c5ab6c"), Color("#9e83b4"), Color("#c0c6ca")]
 # Каждая пара точек задаёт короткий проход по свободному полу в пределах одного отсека.
@@ -48,17 +49,48 @@ func populate(key: String) -> void:
 	time = 0.0
 	speaker = -1
 	line = ""
-	paths = {"arrival": ARRIVAL, "home": HOME, "shop": SHOP}[key]
+	if key == "supply":
+		paths = supply_paths()
+	else:
+		paths = {"arrival": ARRIVAL, "home": HOME, "shop": SHOP}[key]
 	add_walker(0, game.player)
 	for id in paths:
 		add_walker(id, paths[id][0])
 		targets[id] = 1
 		waits[id] = fmod(id * 0.71, 3.0)
 
+func supply_paths() -> Dictionary:
+	var trip = game.supply
+	match trip.place:
+		trip.Place.PASSAGE:
+			if game.route == "home":
+				return {1: [trip.STORE_GATE + Vector2(-18, -3)]} if trip.access_ready else {1: [trip.SERVICE_PANEL + Vector2(22, -4)]}
+		trip.Place.STORE:
+			if game.route == "home":
+				return {1: [trip.SERVICE_EXIT + Vector2(-15, -2)]}
+		trip.Place.DOCK:
+			var result := {5: [Vector2(515,130)], 6: [Vector2(160,143),Vector2(185,137)]}
+			if game.route == "home" and not trip.access_ready:
+				result[1] = [game.HATCH + Vector2(-18, -2)]
+			if trip.delivered & trip.RATIONS:
+				result[2] = [Vector2(270,327), Vector2(294,350)]
+				result[4] = [Vector2(284,334), Vector2(310,308)]
+			if trip.delivered & trip.HEATER:
+				result[7] = [Vector2(139,310), Vector2(149,310)]
+			return result
+	return {}
+
 func add_walker(id: int, start: Vector2) -> void:
 	var actor := Walker.new()
 	add_child(actor)
 	actor.setup(start, COLORS[id], id == 0)
+	if scene_key == "supply" and id in [0,2,4]:
+		var freight := Freight.new()
+		freight.trip = game.supply
+		freight.cart = id == 0 and game.route == "shop" and game.supply.access_ready
+		freight.ration_worker = id != 0
+		actor.add_child(freight)
+		actor.set_meta("freight", freight)
 	people[id] = actor
 
 func stop_sounds() -> void:
@@ -75,13 +107,17 @@ func finish_scene() -> void:
 
 func advance(delta: float) -> void:
 	people[0].follow(game.player, game.running)
+	if scene_key == "supply":
+		for id in [0,2,4]:
+			if people.has(id):
+				people[id].get_meta("freight").queue_redraw()
 	speaker = -1
 	line = ""
 	var pair: Array = []
 	if game.modal == "" and game.phase != game.Phase.NIGHT:
 		time += delta
 		var beat := fmod(time, 16.0)
-		if beat >= 2.0 and beat < 8.5:
+		if LINES.has(scene_key) and beat >= 2.0 and beat < 8.5:
 			pair = LINES[scene_key][floori(time / 16.0) % 2]
 			if beat < 5.0 or beat >= 5.4:
 				var turn := int(beat >= 5.4)

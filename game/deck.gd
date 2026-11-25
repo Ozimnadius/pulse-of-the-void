@@ -3,6 +3,10 @@ extends Node2D
 const STAR_PERIOD := 150.0
 const ASTEROID_PERIOD := 37.5
 const FERRY = preload("res://art/ferry.png")
+const SERVICE = preload("res://art/service_gallery.png")
+const LOADING = preload("res://art/loading_deck.png")
+const WAREHOUSE = preload("res://art/warehouse.png")
+const Freight = preload("res://freight.gd")
 const AMBER = Color("#ffcb7f")
 const MINT = Color("#89dfce")
 var lamp: GradientTexture2D
@@ -25,6 +29,14 @@ func glow(p: Vector2, size: Vector2, tint: Color) -> void:
 	draw_texture_rect(lamp, Rect2(p-size/2, size), false, tint)
 
 func _draw() -> void:
+	var trip = game.supply
+	if game.phase == game.Phase.SUPPLY and trip.place != trip.Place.DOCK:
+		draw_supply_room(trip)
+	else:
+		draw_dock()
+	draw_markers()
+
+func draw_dock() -> void:
 	var drift := Vector2(fposmod(game.elapsed, STAR_PERIOD) / STAR_PERIOD,
 		fposmod(game.elapsed, ASTEROID_PERIOD) / ASTEROID_PERIOD)
 	sky_material.set_shader_parameter("drift", drift)
@@ -46,9 +58,9 @@ func _draw() -> void:
 		if origin.x < 965:
 			draw_texture_rect(FERRY, Rect2(origin,Vector2(180,74)),false)
 			glow(origin+Vector2(6,41),Vector2(43,23),Color(0.48,0.96,1,0.42))
-	var open: bool = game.route == "home" and game.phase == game.Phase.FINISHED
+	var open: bool = game.route == "home" and game.phase >= game.Phase.FINISHED
 	hatch(open)
-	if game.route == "shop" and game.phase == game.Phase.FINISHED:
+	if game.route == "shop" and game.phase >= game.Phase.FINISHED:
 		draw_rect(Rect2(747,296,56,30),Color("#735b37"))
 		draw_rect(Rect2(751,306,48,20),Color("#50493b"))
 		for x in [752,770,788]:
@@ -60,6 +72,53 @@ func _draw() -> void:
 		for x in [626,665,711]:
 			draw_rect(Rect2(x,199,9,6), Color("#54473e"))
 			draw_rect(Rect2(x+2,198,5,2), Color("#b59b78"))
+	if game.phase == game.Phase.SUPPLY:
+		draw_settlement(game.supply)
+
+func draw_supply_room(trip) -> void:
+	var home: bool = game.route == "home"
+	var bounds := Rect2(0,0,960,480)
+	if trip.place == trip.Place.STORE:
+		draw_texture_rect(WAREHOUSE, bounds, false)
+		if trip.stock() & trip.RATIONS:
+			Freight.pallet(self, trip.FOOD_PALLET, trip.RATIONS)
+		if trip.stock() & trip.HEATER:
+			Freight.pallet(self, trip.HEATER_PALLET, trip.HEATER)
+	else:
+		draw_texture_rect(SERVICE if home else LOADING, bounds, false)
+		if home and trip.access_ready:
+			draw_polyline(PackedVector2Array([Vector2(684,267),Vector2(696,271),
+				Vector2(714,267),Vector2(715,225),Vector2(710,216)]),Color("#b57a42"),3,true)
+			draw_rect(Rect2(852,115,48,154),Color("#182321"))
+			draw_rect(Rect2(858,121,37,142),Color("#0c181c"))
+			draw_line(Vector2(856,115),Vector2(898,115),MINT,3)
+			glow(Vector2(879,270),Vector2(92,41),Color(0.53,0.86,0.74,0.27))
+		elif not home and not trip.access_ready:
+			Freight.draw_cart(self, trip.CART_STAND, 0)
+
+func draw_settlement(trip) -> void:
+	if trip.delivered & trip.RATIONS:
+		var box := Vector2(275,330)
+		Freight.pallet(self, box, trip.RATIONS)
+		draw_rect(Rect2(box+Vector2(-11,-18),Vector2(22,7)),Color("#433629"))
+		for x in [-9,-2,5]:
+			draw_rect(Rect2(box+Vector2(x,-18),Vector2(5,5)),Color("#e1bd83"))
+	if trip.delivered & trip.HEATER:
+		var stove := Vector2(149,286)
+		Freight.draw_item(self,stove,trip.HEATER)
+		glow(stove+Vector2(0,-18),Vector2(70,38),Color(1,0.60,0.19,0.62))
+		draw_line(stove+Vector2(-9,-18),stove+Vector2(9,-18),AMBER,2)
+		draw_rect(Rect2(stove+Vector2(-9,-29),Vector2(18,9)),Color("#bcc1ac"))
+		draw_line(stove+Vector2(-12,-29),stove+Vector2(12,-29),Color("#525b56"),2)
+		for i in 5:
+			var t := fposmod(float(game.elapsed)*0.45 + i*0.21,1.0)
+			var vapor := stove + Vector2(sin(t*7+i)*4,-31-t*24)
+			draw_circle(vapor,2+t*2,Color(0.92,0.91,0.80,0.78*(1-t)))
+		var cook = game.residents.people[7]
+		var spoon := stove + Vector2(sin(game.elapsed * 3.0) * 5, -28)
+		draw_line(cook.position + Vector2(-4,-15), spoon, Color("#b6a27c"), 2)
+
+func draw_markers() -> void:
 	draw_arc(game.player+Vector2(0,-2),10,0.05,PI-0.05,20,MINT,1.1,true)
 	glow(game.player+Vector2(0,-10),Vector2(38,38),Color(0.38,1,0.85,0.12))
 	for p in game.points():

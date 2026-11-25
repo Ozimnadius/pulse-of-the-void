@@ -1,6 +1,8 @@
 extends Node2D
 
-enum Phase { ARRIVAL, NIGHT, MORNING, FINISHED }
+enum Phase { ARRIVAL, NIGHT, MORNING, FINISHED, SUPPLY }
+const SupplyRun = preload("res://supply_run.gd")
+var supply := SupplyRun.new()
 const MUSIC_GAIN := 0.75
 const BUNK = Vector2(145, 132)
 const BENCH = Vector2(476, 116)
@@ -51,6 +53,7 @@ func _ready() -> void:
 	$HUD.hide()
 	$Deck.hide()
 	$TitleMenu.start_requested.connect(_start_from_menu)
+	$TitleMenu.supply_requested.connect(_start_supply)
 	$TitleMenu.continue_requested.connect(_continue_game)
 	$TitleMenu.load_requested.connect(_browse_from_title)
 	$TitleMenu.menu_requested.connect(_return_to_menu)
@@ -130,6 +133,8 @@ func _write_save(id: String, caption: String) -> bool:
 	var state := {"phase": Phase.MORNING if phase == Phase.NIGHT else phase, "route": route,
 		"inspected": inspected, "player": MORNING_START if phase == Phase.NIGHT else player,
 		"guide": guide, "guide_index": guide_index, "progress": progress}
+	if phase == Phase.SUPPLY:
+		state.supply = supply.snapshot()
 	var ok: bool = store.write(id, caption, _saved_objective(), state)
 	$SaveWarning.visible = not ok
 	return ok
@@ -157,15 +162,19 @@ func _restore(record: Dictionary) -> void:
 	guide = state.guide
 	guide_index = state.guide_index
 	progress = state.progress
+	supply.restore(state.get("supply", {}))
 	modal = ""
 	selection = 0
 	repair = 0.0
 	night_time = 0.0
 	running = false
 	$Departure.stop()
-	residents.populate("arrival" if phase == Phase.ARRIVAL else route)
-	if route == "home":
-		residents.people[1].position = guide
+	if phase == Phase.SUPPLY:
+		populate_supply_scene()
+	else:
+		residents.populate("arrival" if phase == Phase.ARRIVAL else route)
+		if route == "home":
+			residents.people[1].position = guide
 	_show_game()
 	if phase == Phase.FINISHED:
 		_show_ending()
@@ -178,6 +187,15 @@ func _finish_route() -> void:
 	phase = Phase.FINISHED
 	_autosave()
 	_show_ending()
+
+func _start_supply() -> void:
+	phase = Phase.SUPPLY
+	supply.restore({})
+	supply.enter(self, SupplyRun.Place.DOCK, HATCH if route == "home" else RAMP)
+	_show_game()
+
+func populate_supply_scene() -> void:
+	residents.populate("supply")
 
 func _show_ending() -> void:
 	held.clear()
@@ -259,6 +277,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func reset_game() -> void:
 	phase = Phase.ARRIVAL
+	supply.restore({})
 	route = ""
 	inspected.clear()
 	modal = ""
@@ -282,6 +301,9 @@ func is_held(keys: Array) -> bool:
 	return false
 
 func can_walk(pos: Vector2) -> bool:
+	if phase == Phase.SUPPLY and supply.place != SupplyRun.Place.DOCK:
+		var upper := 184 if supply.place == SupplyRun.Place.STORE else (275 if route == "home" else 230)
+		return Rect2(40, upper, 882, 449 - upper).has_point(pos)
 	if Rect2(437, 357, 37, 50).has_point(pos) or Rect2(403, 385, 34, 18).has_point(pos):
 		return false
 	for area in FLOOR:
@@ -310,7 +332,7 @@ func _physics_process(delta: float) -> void:
 			player.x += travel.x
 		if can_walk(player + Vector2(0, travel.y)):
 			player.y += travel.y
-		if route == "home" and progress == 1 and guide_index < GUIDE_PATH.size():
+		if phase == Phase.MORNING and route == "home" and progress == 1 and guide_index < GUIDE_PATH.size():
 			var destination: Vector2 = GUIDE_PATH[guide_index]
 			if player.distance_to(guide) < 120:
 				guide = guide.move_toward(destination, delta * 62)
@@ -318,7 +340,7 @@ func _physics_process(delta: float) -> void:
 					guide_index += 1
 					if guide_index == GUIDE_PATH.size():
 						_autosave()
-		if route == "shop" and progress == 1:
+		if phase == Phase.MORNING and route == "shop" and progress == 1:
 			if player.distance_to(BENCH) < 34 and is_held([KEY_F, KEY_E]):
 				repair = minf(1.0, repair + delta / 1.15)
 				if repair >= 1.0:
@@ -333,6 +355,8 @@ func _physics_process(delta: float) -> void:
 	$HUD.queue_redraw()
 
 func points() -> Array:
+	if phase == Phase.SUPPLY:
+		return supply.points(self)
 	if phase == Phase.ARRIVAL:
 		return [["home", BUNK, "Жилая секция"], ["shop", BENCH, "Мастерская"], ["switch", SWITCH, "Распределитель"], ["ship", RAMP, "Сломанный корабль"]]
 	if phase == Phase.MORNING:
@@ -369,6 +393,9 @@ func interact() -> void:
 	if target.is_empty():
 		return
 	chirp(370)
+	if phase == Phase.SUPPLY:
+		supply.interact(self, target)
+		return
 	match target:
 		"home":
 			_inspect("home")
@@ -434,6 +461,8 @@ func objective(at_phase: int = -1) -> String:
 		return "Эвакуационный рейс отстыковался"
 	if at_phase == Phase.FINISHED:
 		return "Кабель для второй линии найден" if route == "home" else "В грузовом отсеке горит свет"
+	if at_phase == Phase.SUPPLY:
+		return supply.objective(route == "home")
 	if route == "home":
 		if progress == 0:
 			return "Поговорите с Ниной в жилой секции"
