@@ -16,8 +16,8 @@ const HOME = {
 }
 const SHOP = {
 	5: [Vector2(515,130)], 3: [Vector2(421,143), Vector2(451,143)],
-	4: [Vector2(137,326), Vector2(153,326)], 6: [Vector2(181,383), Vector2(197,383)],
-	2: [Vector2(55,373), Vector2(70,374)], 1: [Vector2(105,344), Vector2(123,346)]
+	4: [Vector2(137,326), Vector2(153,326)], 6: [Vector2(201,374), Vector2(201,389)],
+	2: [Vector2(61,326), Vector2(77,326)], 1: [Vector2(98,325), Vector2(115,325)]
 }
 # Два коротких обмена репликами для каждой обстановки, по очереди.
 const LINES = {
@@ -64,7 +64,7 @@ func supply_paths() -> Dictionary:
 	match trip.place:
 		trip.Place.PASSAGE:
 			if game.route == "home":
-				return {1: [trip.STORE_GATE + Vector2(-18, -3)]} if trip.access_ready else {1: [trip.SERVICE_PANEL + Vector2(22, -4)]}
+				return {1: [trip.SERVICE_DOOR + Vector2(-20, 4)]} if trip.access_ready else {1: [trip.SERVICE_PANEL + Vector2(18, 2)]}
 		trip.Place.STORE:
 			if game.route == "home":
 				return {1: [trip.SERVICE_EXIT + Vector2(-15, -2)]}
@@ -76,7 +76,7 @@ func supply_paths() -> Dictionary:
 				result[2] = [Vector2(270,327), Vector2(294,350)]
 				result[4] = [Vector2(284,334), Vector2(310,308)]
 			if trip.delivered & trip.HEATER:
-				result[7] = [Vector2(139,310), Vector2(149,310)]
+				result[7] = [Vector2(139,325), Vector2(149,325)]
 			return result
 	return {}
 
@@ -87,7 +87,7 @@ func add_walker(id: int, start: Vector2) -> void:
 	if scene_key == "supply" and id in [0,2,4]:
 		var freight := Freight.new()
 		freight.trip = game.supply
-		freight.cart = id == 0 and game.route == "shop" and game.supply.access_ready
+		freight.cart = id == 0 and game.route == "shop" and game.supply.access_ready and not game.supply.cart_parked()
 		freight.ration_worker = id != 0
 		actor.add_child(freight)
 		actor.set_meta("freight", freight)

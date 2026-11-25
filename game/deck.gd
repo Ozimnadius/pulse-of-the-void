@@ -40,6 +40,7 @@ func draw_dock() -> void:
 	var drift := Vector2(fposmod(game.elapsed, STAR_PERIOD) / STAR_PERIOD,
 		fposmod(game.elapsed, ASTEROID_PERIOD) / ASTEROID_PERIOD)
 	sky_material.set_shader_parameter("drift", drift)
+	draw_kitchen_threshold()
 	var morning: bool = game.phase >= game.Phase.MORNING
 	if morning:
 		draw_rect(Rect2(0,0,960,480), Color(0.49,0.65,0.76,0.065))
@@ -75,28 +76,54 @@ func draw_dock() -> void:
 	if game.phase == game.Phase.SUPPLY:
 		draw_settlement(game.supply)
 
+func draw_kitchen_threshold() -> void:
+	var texture: Texture2D = $Backdrop.texture
+	var units := texture.get_size() / Vector2(960,480)
+	var floor_patch := Rect2(Vector2(241,329)*units, Vector2(19,34)*units)
+	draw_texture_rect_region(texture, Rect2(214,320,19,34), floor_patch)
+	for y in [319,354]:
+		draw_line(Vector2(214,y),Vector2(231,y),Color("#334249"),3)
+		draw_line(Vector2(215,y-1),Vector2(222,y-1),AMBER,2)
+	for x in [217,221]:
+		draw_line(Vector2(x,321),Vector2(x,352),Color("#7a7c70"),1)
+
 func draw_supply_room(trip) -> void:
 	var home: bool = game.route == "home"
 	var bounds := Rect2(0,0,960,480)
 	if trip.place == trip.Place.STORE:
 		draw_texture_rect(WAREHOUSE, bounds, false)
 		if trip.stock() & trip.RATIONS:
+			glow(trip.FOOD_PALLET,Vector2(74,38),Color(1,0.72,0.32,0.48))
 			Freight.pallet(self, trip.FOOD_PALLET, trip.RATIONS)
 		if trip.stock() & trip.HEATER:
+			glow(trip.HEATER_PALLET,Vector2(74,38),Color(0.45,0.95,0.82,0.48))
 			Freight.pallet(self, trip.HEATER_PALLET, trip.HEATER)
 	else:
 		draw_texture_rect(SERVICE if home else LOADING, bounds, false)
-		if home and trip.access_ready:
-			draw_polyline(PackedVector2Array([Vector2(684,267),Vector2(696,271),
-				Vector2(714,267),Vector2(715,225),Vector2(710,216)]),Color("#b57a42"),3,true)
-			draw_rect(Rect2(852,115,48,154),Color("#182321"))
-			draw_rect(Rect2(858,121,37,142),Color("#0c181c"))
-			draw_line(Vector2(856,115),Vector2(898,115),MINT,3)
-			glow(Vector2(879,270),Vector2(92,41),Color(0.53,0.86,0.74,0.27))
+		if home:
+			draw_service_door(trip.access_ready)
 		elif not home and not trip.access_ready:
 			Freight.draw_cart(self, trip.CART_STAND, 0)
 
+func draw_service_door(powered: bool) -> void:
+	var indicator := MINT if powered else AMBER
+	draw_rect(Rect2(687,190,13,16),Color("#242c2c"))
+	draw_rect(Rect2(688,191,11,14),Color("#687268"),false,1)
+	draw_line(Vector2(690,194),Vector2(696,194),indicator,2)
+	for x in [690,693,696]:
+		draw_line(Vector2(x,199),Vector2(x,202),Color("#a99d7e"),1)
+	if powered:
+		draw_polyline(PackedVector2Array([Vector2(693,204),Vector2(693,211),Vector2(698,214),
+			Vector2(724,214),Vector2(729,210),Vector2(735,210)]),Color("#b77b48"),2)
+		draw_rect(Rect2(740,165,23,46),Color("#101a1b"))
+		draw_line(Vector2(742,167),Vector2(742,207),Color("#48534b"),2)
+		draw_line(Vector2(741,209),Vector2(761,209),Color("#7f795b"),2)
+		draw_line(Vector2(741,163),Vector2(762,163),MINT,2)
+		glow(Vector2(752,215),Vector2(57,24),Color(0.53,0.86,0.74,0.3))
+
 func draw_settlement(trip) -> void:
+	if game.route == "shop" and trip.cart_parked():
+		Freight.draw_cart(self, trip.CART_BAY, 0)
 	if trip.delivered & trip.RATIONS:
 		var box := Vector2(275,330)
 		Freight.pallet(self, box, trip.RATIONS)
@@ -104,7 +131,7 @@ func draw_settlement(trip) -> void:
 		for x in [-9,-2,5]:
 			draw_rect(Rect2(box+Vector2(x,-18),Vector2(5,5)),Color("#e1bd83"))
 	if trip.delivered & trip.HEATER:
-		var stove := Vector2(149,286)
+		var stove := Vector2(149,306)
 		Freight.draw_item(self,stove,trip.HEATER)
 		glow(stove+Vector2(0,-18),Vector2(70,38),Color(1,0.60,0.19,0.62))
 		draw_line(stove+Vector2(-9,-18),stove+Vector2(9,-18),AMBER,2)
@@ -127,6 +154,8 @@ func draw_markers() -> void:
 		var done: bool = game.inspected.has(p[0])
 		var primary: bool = not done and (p[0] != "switch" or game.inspected.size() == 2)
 		var anchor: Vector2 = p[1] + Vector2(0,-46 if p[0] in ["guide","mechanic"] else -8)
+		if p[0] in ["food","heater"]:
+			anchor.y -= 23
 		marker(anchor, done, primary)
 	if game.phase == game.Phase.MORNING and game.route == "home" and game.progress == 1 and game.guide_index < game.GUIDE_PATH.size():
 		marker(game.guide+Vector2(0,-47),false,true)

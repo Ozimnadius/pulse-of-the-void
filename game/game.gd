@@ -20,6 +20,12 @@ const FLOOR = [
 	Rect2(579, 191, 74, 26), Rect2(553, 352, 47, 43),
 	Rect2(589, 371, 270, 18), Rect2(755, 334, 51, 50)
 ]
+# Порог в восточной стене столовой, проход перед плитой и обход лавок.
+const KITCHEN_FLOOR = [
+	Rect2(207, 323, 29, 28), Rect2(195, 321, 18, 78),
+	Rect2(39, 321, 162, 10), Rect2(39, 329, 8, 49),
+	Rect2(46, 401, 153, 5), Rect2(193, 390, 12, 16)
+]
 
 var phase = Phase.ARRIVAL
 var route = ""
@@ -170,6 +176,7 @@ func _restore(record: Dictionary) -> void:
 	running = false
 	$Departure.stop()
 	if phase == Phase.SUPPLY:
+		player = supply.restore_position(player, route == "home", not state.supply.has("layout"))
 		populate_supply_scene()
 	else:
 		residents.populate("arrival" if phase == Phase.ARRIVAL else route)
@@ -302,12 +309,14 @@ func is_held(keys: Array) -> bool:
 
 func can_walk(pos: Vector2) -> bool:
 	if phase == Phase.SUPPLY and supply.place != SupplyRun.Place.DOCK:
-		var upper := 184 if supply.place == SupplyRun.Place.STORE else (275 if route == "home" else 230)
-		return Rect2(40, upper, 882, 449 - upper).has_point(pos)
+		return supply.floor_position(pos, route == "home") == pos
 	if Rect2(437, 357, 37, 50).has_point(pos) or Rect2(403, 385, 34, 18).has_point(pos):
 		return false
 	for area in FLOOR:
 		if area.has_point(pos):
+			return true
+	for aisle in KITCHEN_FLOOR:
+		if aisle.has_point(pos):
 			return true
 	return false
 

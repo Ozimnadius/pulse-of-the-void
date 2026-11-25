@@ -17,11 +17,13 @@ func _draw() -> void:
 			draw_rect(Rect2(0,-17,2,6), IRON)
 		return
 	if cart:
-		draw_cart(self, Vector2(-23,2), trip.carried)
+		draw_cart(self, trip.cart_offset(get_parent().position), trip.carried)
 	elif trip.carried:
 		draw_item(self, Vector2(4,-13), trip.carried)
 
 static func draw_cart(c: Node2D, p: Vector2, load_mask: int) -> void:
+	c.draw_set_transform(p,0,Vector2(0.78,0.78))
+	p = Vector2.ZERO
 	c.draw_rect(Rect2(p + Vector2(-27,-4), Vector2(54,10)), SHADOW)
 	for x in [-21,16]:
 		c.draw_circle(p + Vector2(x,1), 5, IRON)
@@ -34,6 +36,7 @@ static func draw_cart(c: Node2D, p: Vector2, load_mask: int) -> void:
 		draw_item(c, p + Vector2(-16,-10), Trip.RATIONS)
 	if load_mask & Trip.HEATER:
 		draw_item(c, p + Vector2(7,-10), Trip.HEATER)
+	c.draw_set_transform(Vector2.ZERO)
 
 static func draw_item(c: Node2D, p: Vector2, item: int) -> void:
 	if item == Trip.RATIONS:

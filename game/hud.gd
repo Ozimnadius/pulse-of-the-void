@@ -59,13 +59,13 @@ func _draw() -> void:
 				tag(Vector2(75,463),"ГОТОВЯТ ОБЕД",MINT)
 		elif supply.place == supply.Place.STORE:
 			if supply.stock() & supply.RATIONS:
-				tag(Vector2(434,556),"ЯЩИК ПАЙКОВ",GOLD)
+				landmark(supply.FOOD_PALLET,"ЯЩИК ПАЙКОВ",GOLD)
 			if supply.stock() & supply.HEATER:
-				tag(Vector2(772,599),"НАГРЕВАТЕЛЬ",MINT)
-			tag(Vector2(56 if home else 1064,366),"К ГАЛЕРЕЕ" if home else "К ПЛОЩАДКЕ")
+				landmark(supply.HEATER_PALLET,"НАГРЕВАТЕЛЬ",MINT)
+			landmark(supply.SERVICE_EXIT if home else supply.LOADING_EXIT,"К ГАЛЕРЕЕ" if home else "К ПЛОЩАДКЕ")
 		else:
-			tag(Vector2(90,550),"К ПРИЧАЛУ")
-			tag(Vector2(1065,493),"СЛУЖЕБНАЯ ДВЕРЬ" if home else "ВОРОТА СКЛАДА")
+			landmark(supply.passage_entry(home),"К ПРИЧАЛУ")
+			landmark(supply.passage_gate(home),"СЛУЖЕБНАЯ ДВЕРЬ" if home else "ВОРОТА СКЛАДА")
 		if game.phase == game.Phase.ARRIVAL:
 			tag(Vector2(890,169),"ЭВАКУАЦИОННЫЙ РЕЙС",GOLD)
 			if game.player.distance_to(Vector2(682,191)) < 40 and game.inspected.is_empty():
@@ -78,7 +78,8 @@ func _draw() -> void:
 					caption = "Удерживайте F"
 				var width = normal.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,16).x+24
 				var anchor: Vector2 = game.player * 4.0/3.0 + Vector2(0,72)
-				tag(Vector2(clampf(anchor.x-width/2,8,1265-width),anchor.y-52),caption,WHITE,16)
+				var off_room: bool = second_day and supply.place != supply.Place.DOCK
+				tag(Vector2(clampf(anchor.x-width/2,8,1265-width),anchor.y + (63 if off_room else -52)),caption,WHITE,16)
 	draw_rect(Rect2(0,712,1280,88),INK)
 	draw_rect(Rect2(0,712,1280,1), LINE)
 	draw_rect(Rect2(26,732,3,47),GOLD if not morning else MINT)
@@ -90,7 +91,7 @@ func _draw() -> void:
 	if game.phase == game.Phase.FINISHED:
 		kicker = "ПЕРВАЯ СМЕНА ЗАВЕРШЕНА"
 	if second_day:
-		var vehicle = "ТЕЛЕЖКА" if not home and supply.access_ready else "В РУКАХ"
+		var vehicle = "ТЕЛЕЖКА" if not home and supply.access_ready and not supply.cart_parked() else "В РУКАХ"
 		kicker = "СНАБЖЕНИЕ  /  %s · %s" % [vehicle, supply.load_name(supply.carried).to_upper()]
 	word(Vector2(44,748),kicker,13,MINT if morning else GOLD,mono)
 	word(Vector2(44,778),game.objective(),24,WHITE,heavy)
@@ -132,6 +133,11 @@ func tag(p: Vector2, caption: String, color: Color = QUIET, size: int = 12) -> v
 	var width = ceilf(font.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,size).x) + 16
 	draw_rect(Rect2(p+Vector2(0,-size-4),Vector2(width,size+10)),Color(0.045,0.083,0.098,0.91))
 	word(p+Vector2(8,0),caption,size,color,font)
+
+func landmark(point: Vector2, caption: String, color: Color = QUIET) -> void:
+	var foot: Vector2 = game.get_node("Deck").to_global(point)
+	var width := mono.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,12).x + 16
+	tag(Vector2(clampf(foot.x-width/2,8,1272-width),foot.y+31),caption,color)
 
 func frame(r: Rect2) -> void:
 	draw_rect(r,INK)
