@@ -42,14 +42,17 @@ func pose(frame: int, running: bool) -> void:
 	body.flip_h = heading.x < 0
 	body.region_rect = Rect2(frame * 56, (view * 2 + int(running)) * 56, 56, 56)
 
-func follow(destination: Vector2, running := false) -> void:
+func follow(destination: Vector2, running := false, facing := Vector2.ZERO) -> void:
 	var motion := (destination - position) / Vector2(1.0, DEPTH)
 	position = destination
+	if facing != Vector2.ZERO:
+		heading = facing
 	if motion.is_zero_approx():
 		gait = 0.25 if gait < 0.5 else 0.75
 		pose(12, false)
 		return
-	heading = motion.normalized()
+	if facing == Vector2.ZERO:
+		heading = motion.normalized()
 	var old_half := gait >= 0.5
 	gait = fmod(gait + motion.length() / (62.0 if running else 46.0), 1.0)
 	if (gait >= 0.5) != old_half:

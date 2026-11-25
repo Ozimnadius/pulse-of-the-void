@@ -177,6 +177,10 @@ func _restore(record: Dictionary) -> void:
 	$Departure.stop()
 	if phase == Phase.SUPPLY:
 		player = supply.restore_position(player, route == "home", not state.supply.has("layout"))
+		if route == "shop" and supply.place == SupplyRun.Place.DOCK and supply.access_ready and not state.supply.has("parked") and player.x < 232:
+			supply.cart.parked = true
+		if supply.pushing(route):
+			supply.cart.align_at_entry(self)
 		populate_supply_scene()
 	else:
 		residents.populate("arrival" if phase == Phase.ARRIVAL else route)
@@ -310,6 +314,10 @@ func is_held(keys: Array) -> bool:
 func can_walk(pos: Vector2) -> bool:
 	if phase == Phase.SUPPLY and supply.place != SupplyRun.Place.DOCK:
 		return supply.floor_position(pos, route == "home") == pos
+	if phase == Phase.SUPPLY and route == "shop" and (SupplyRun.DOCK_BRIDGE.has_point(pos) or SupplyRun.DOCK_APPROACH.has_point(pos)):
+		return true
+	if pos.x >= 911 and SupplyRun.DOCK_BRIDGE.has_point(pos):
+		return false
 	if Rect2(437, 357, 37, 50).has_point(pos) or Rect2(403, 385, 34, 18).has_point(pos):
 		return false
 	for area in FLOOR:
@@ -335,12 +343,20 @@ func _physics_process(delta: float) -> void:
 			int(is_held([KEY_RIGHT, KEY_D])) - int(is_held([KEY_LEFT, KEY_A])),
 			int(is_held([KEY_DOWN, KEY_S])) - int(is_held([KEY_UP, KEY_W])))
 		running = is_held([KEY_SHIFT])
-		var travel = direction.normalized() * (104.0 if running else 62.0) * delta
-		travel.y *= Walker.DEPTH
-		if can_walk(player + Vector2(travel.x, 0)):
-			player.x += travel.x
-		if can_walk(player + Vector2(0, travel.y)):
-			player.y += travel.y
+		if phase == Phase.SUPPLY and supply.pushing(route):
+			supply.cart.drive(self, direction.normalized(), 83.0 if running else 58.0, delta)
+		else:
+			var travel = direction.normalized() * (104.0 if running else 62.0) * delta
+			travel.y *= Walker.DEPTH
+			if can_walk(player + Vector2(travel.x, 0)):
+				player.x += travel.x
+			if can_walk(player + Vector2(0, travel.y)):
+				player.y += travel.y
+		if phase == Phase.SUPPLY and route == "shop":
+			if supply.place == SupplyRun.Place.DOCK and player.x >= 944 and direction.x > 0:
+				supply.enter(self, SupplyRun.Place.PASSAGE, Vector2(34,player.y+31), true)
+			elif supply.place == SupplyRun.Place.PASSAGE and player.x <= 16 and direction.x < 0:
+				supply.enter(self, SupplyRun.Place.DOCK, Vector2(926,player.y-31), true)
 		if phase == Phase.MORNING and route == "home" and progress == 1 and guide_index < GUIDE_PATH.size():
 			var destination: Vector2 = GUIDE_PATH[guide_index]
 			if player.distance_to(guide) < 120:
@@ -387,6 +403,8 @@ func nearest() -> String:
 	var distance = 33.0
 	for p in points():
 		var d = player.distance_to(p[1])
+		if phase == Phase.SUPPLY and supply.pushing(route):
+			d = minf(d, supply.cart.center(player).distance_to(p[1]))
 		if d < distance:
 			closest = p[0]
 			distance = d

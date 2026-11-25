@@ -53,6 +53,8 @@ func _draw() -> void:
 			tag(Vector2(502,318),"МАСТЕРСКАЯ")
 			tag(Vector2(47,636),"СТОЛОВАЯ")
 			tag(Vector2(995,601),"ГРУЗОВОЙ ОТСЕК")
+			if second_day and not home:
+				tag(Vector2(1106,287),"ПЛОЩАДКА →",MINT)
 			if second_day and supply.delivered & supply.RATIONS:
 				tag(Vector2(326,563),"РАЗДАЧА ПАЙКОВ",GOLD)
 			if second_day and supply.delivered & supply.HEATER:
@@ -63,8 +65,13 @@ func _draw() -> void:
 			if supply.stock() & supply.HEATER:
 				landmark(supply.HEATER_PALLET,"НАГРЕВАТЕЛЬ",MINT)
 			landmark(supply.SERVICE_EXIT if home else supply.LOADING_EXIT,"К ГАЛЕРЕЕ" if home else "К ПЛОЩАДКЕ")
+		elif supply.place == supply.Place.HOLD:
+			landmark(supply.HOLD_RAMP,"К ТРАПУ")
+			landmark(supply.HOLD_DOOR,"НА ПЛОЩАДКУ")
 		else:
-			landmark(supply.passage_entry(home),"К ПРИЧАЛУ")
+			if not home:
+				tag(Vector2(12,333),"← ПРИЧАЛ",MINT)
+			landmark(supply.passage_entry(home),"К ПРИЧАЛУ" if home else "В ТРЮМ")
 			landmark(supply.passage_gate(home),"СЛУЖЕБНАЯ ДВЕРЬ" if home else "ВОРОТА СКЛАДА")
 		if game.phase == game.Phase.ARRIVAL:
 			tag(Vector2(890,169),"ЭВАКУАЦИОННЫЙ РЕЙС",GOLD)
@@ -91,7 +98,9 @@ func _draw() -> void:
 	if game.phase == game.Phase.FINISHED:
 		kicker = "ПЕРВАЯ СМЕНА ЗАВЕРШЕНА"
 	if second_day:
-		var vehicle = "ТЕЛЕЖКА" if not home and supply.access_ready and not supply.cart_parked() else "В РУКАХ"
+		var vehicle = "ТЕЛЕЖКА" if supply.pushing(game.route) else "В РУКАХ"
+		if not home and supply.cart.parked:
+			vehicle = "ТЕЛЕЖКА У КУХНИ"
 		kicker = "СНАБЖЕНИЕ  /  %s · %s" % [vehicle, supply.load_name(supply.carried).to_upper()]
 	word(Vector2(44,748),kicker,13,MINT if morning else GOLD,mono)
 	word(Vector2(44,778),game.objective(),24,WHITE,heavy)

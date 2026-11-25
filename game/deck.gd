@@ -5,6 +5,7 @@ const ASTEROID_PERIOD := 37.5
 const FERRY = preload("res://art/ferry.png")
 const SERVICE = preload("res://art/service_gallery.png")
 const LOADING = preload("res://art/loading_deck.png")
+const HOLD = preload("res://art/cargo_hold.png")
 const WAREHOUSE = preload("res://art/warehouse.png")
 const Freight = preload("res://freight.gd")
 const AMBER = Color("#ffcb7f")
@@ -41,6 +42,7 @@ func draw_dock() -> void:
 		fposmod(game.elapsed, ASTEROID_PERIOD) / ASTEROID_PERIOD)
 	sky_material.set_shader_parameter("drift", drift)
 	draw_kitchen_threshold()
+	draw_bridge(844,168,116,game.phase == game.Phase.SUPPLY and game.route == "shop")
 	var morning: bool = game.phase >= game.Phase.MORNING
 	if morning:
 		draw_rect(Rect2(0,0,960,480), Color(0.49,0.65,0.76,0.065))
@@ -87,10 +89,38 @@ func draw_kitchen_threshold() -> void:
 	for x in [217,221]:
 		draw_line(Vector2(x,321),Vector2(x,352),Color("#7a7c70"),1)
 
+func draw_bridge(x: int, y: int, width: int, open: bool) -> void:
+	var floor_units := LOADING.get_size() / Vector2(960,480)
+	draw_rect(Rect2(x,y+7,width,49),Color("#1b2629"))
+	for beam in range(x+4,x+width-12,22):
+		draw_line(Vector2(beam,y+53),Vector2(beam+13,y+44),Color("#686353"),2)
+	# Плиты, заклёпки и рельсы взяты с самой погрузочной площадки.
+	var plating := Rect2(Vector2(180,180)*floor_units,Vector2(width,44)*floor_units)
+	draw_texture_rect_region(LOADING,Rect2(x,y,width,44),plating)
+	for rail_y in [y,y+44]:
+		var rail := Rect2(Vector2(220,292)*floor_units,Vector2(width,8)*floor_units)
+		draw_texture_rect_region(LOADING,Rect2(x,rail_y-4,width,8),rail)
+		for post in range(x+6,x+width,32):
+			draw_rect(Rect2(post-1,rail_y-11,5,12),Color("#3e4140"))
+			draw_line(Vector2(post,rail_y-10),Vector2(post,rail_y),Color("#9d8d6d"),1)
+			draw_rect(Rect2(post,rail_y-12,3,2),MINT if open else AMBER)
+		draw_line(Vector2(x+5,rail_y-8),Vector2(x+width,rail_y-8),Color("#7c7968"),1.6)
+		draw_line(Vector2(x+5,rail_y-5),Vector2(x+width,rail_y-5),Color("#393e3d"),1)
+	for stripe in range(y+5,y+41,7):
+		draw_line(Vector2(x+11,stripe-2),Vector2(x+7,stripe+2),Color("#b89453"),2)
+	if not open:
+		draw_rect(Rect2(x+67,y+1,6,42),Color("#2c3739"))
+		for bar_y in range(y+4,y+39,8):
+			draw_line(Vector2(x+68,bar_y+4),Vector2(x+72,bar_y),AMBER,2)
+
 func draw_supply_room(trip) -> void:
 	var home: bool = game.route == "home"
 	var bounds := Rect2(0,0,960,480)
-	if trip.place == trip.Place.STORE:
+	if trip.place == trip.Place.HOLD:
+		draw_texture_rect(HOLD, bounds, false)
+		if not trip.access_ready:
+			Freight.draw_cart(self, trip.CART_STAND, 0)
+	elif trip.place == trip.Place.STORE:
 		draw_texture_rect(WAREHOUSE, bounds, false)
 		if trip.stock() & trip.RATIONS:
 			glow(trip.FOOD_PALLET,Vector2(74,38),Color(1,0.72,0.32,0.48))
@@ -102,8 +132,8 @@ func draw_supply_room(trip) -> void:
 		draw_texture_rect(SERVICE if home else LOADING, bounds, false)
 		if home:
 			draw_service_door(trip.access_ready)
-		elif not home and not trip.access_ready:
-			Freight.draw_cart(self, trip.CART_STAND, 0)
+		else:
+			draw_bridge(0,199,104,true)
 
 func draw_service_door(powered: bool) -> void:
 	var indicator := MINT if powered else AMBER
@@ -122,27 +152,23 @@ func draw_service_door(powered: bool) -> void:
 		glow(Vector2(752,215),Vector2(57,24),Color(0.53,0.86,0.74,0.3))
 
 func draw_settlement(trip) -> void:
-	if game.route == "shop" and trip.cart_parked():
-		Freight.draw_cart(self, trip.CART_BAY, 0)
+	if game.route == "shop" and trip.cart.parked:
+		Freight.draw_cart(self, trip.cart.parking_spot, trip.carried, trip.cart.angle)
 	if trip.delivered & trip.RATIONS:
 		var box := Vector2(275,330)
 		Freight.pallet(self, box, trip.RATIONS)
-		draw_rect(Rect2(box+Vector2(-11,-18),Vector2(22,7)),Color("#433629"))
-		for x in [-9,-2,5]:
-			draw_rect(Rect2(box+Vector2(x,-18),Vector2(5,5)),Color("#e1bd83"))
 	if trip.delivered & trip.HEATER:
 		var stove := Vector2(149,306)
 		Freight.draw_item(self,stove,trip.HEATER)
 		glow(stove+Vector2(0,-18),Vector2(70,38),Color(1,0.60,0.19,0.62))
-		draw_line(stove+Vector2(-9,-18),stove+Vector2(9,-18),AMBER,2)
-		draw_rect(Rect2(stove+Vector2(-9,-29),Vector2(18,9)),Color("#bcc1ac"))
-		draw_line(stove+Vector2(-12,-29),stove+Vector2(12,-29),Color("#525b56"),2)
+		draw_rect(Rect2(stove+Vector2(-8,-22),Vector2(16,9)),Color("#a7aa98"))
+		draw_line(stove+Vector2(-11,-22),stove+Vector2(11,-22),Color("#515b55"),2)
 		for i in 5:
 			var t := fposmod(float(game.elapsed)*0.45 + i*0.21,1.0)
-			var vapor := stove + Vector2(sin(t*7+i)*4,-31-t*24)
+			var vapor := stove + Vector2(sin(t*7+i)*4,-23-t*24)
 			draw_circle(vapor,2+t*2,Color(0.92,0.91,0.80,0.78*(1-t)))
 		var cook = game.residents.people[7]
-		var spoon := stove + Vector2(sin(game.elapsed * 3.0) * 5, -28)
+		var spoon := stove + Vector2(sin(game.elapsed * 3.0) * 5, -22)
 		draw_line(cook.position + Vector2(-4,-15), spoon, Color("#b6a27c"), 2)
 
 func draw_markers() -> void:

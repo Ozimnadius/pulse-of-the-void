@@ -87,7 +87,7 @@ func add_walker(id: int, start: Vector2) -> void:
 	if scene_key == "supply" and id in [0,2,4]:
 		var freight := Freight.new()
 		freight.trip = game.supply
-		freight.cart = id == 0 and game.route == "shop" and game.supply.access_ready and not game.supply.cart_parked()
+		freight.shop = game.route == "shop"
 		freight.ration_worker = id != 0
 		actor.add_child(freight)
 		actor.set_meta("freight", freight)
@@ -106,11 +106,16 @@ func finish_scene() -> void:
 		actor.pose(12, false)
 
 func advance(delta: float) -> void:
-	people[0].follow(game.player, game.running)
+	var facing := Vector2.ZERO
+	if scene_key == "supply" and game.supply.pushing(game.route):
+		facing = game.supply.cart.axis()
+	people[0].follow(game.player, game.running, facing)
 	if scene_key == "supply":
 		for id in [0,2,4]:
 			if people.has(id):
-				people[id].get_meta("freight").queue_redraw()
+				var freight = people[id].get_meta("freight")
+				people[id].move_child(freight, 0 if id == 0 and facing.y < -0.15 else -1)
+				freight.queue_redraw()
 	speaker = -1
 	line = ""
 	var pair: Array = []

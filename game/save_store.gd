@@ -2,7 +2,7 @@ extends RefCounted
 
 const DIRECTORY := "user://saves"
 const AUTO := "auto"
-const VERSION := 2
+const VERSION := 3
 
 func new_id() -> String:
 	return Crypto.new().generate_random_bytes(16).hex_encode()
@@ -16,7 +16,7 @@ func _read(path: String) -> Dictionary:
 	if _digest(payload) != checksum:
 		return {}
 	var value = bytes_to_var(payload)
-	if not value is Dictionary or value.get("version") not in [1, VERSION]:
+	if not value is Dictionary or value.get("version") not in [1, 2, VERSION]:
 		return {}
 	return value
 
